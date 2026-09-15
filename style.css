@@ -1,0 +1,71 @@
+:root {
+  --bg: #f8fafc; --fg: #0f172a; --muted: #64748b; --card: #ffffff; --line: #e2e8f0;
+  --accent: #2563eb; --accent-fg: #ffffff; --shape: #3b82f6; --shape-line: #1e3a8a;
+  --good: #16a34a; --good-bg: #dcfce7; --bad: #dc2626; --bad-bg: #fee2e2;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --fg: #f1f5f9; --muted: #94a3b8; --card: #1e293b; --line: #334155;
+    --accent: #3b82f6; --shape: #60a5fa; --shape-line: #bfdbfe;
+    --good: #4ade80; --good-bg: #14532d; --bad: #f87171; --bad-bg: #7f1d1d;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: 17px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--fg);
+  display: flex; flex-direction: column; min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+}
+header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; }
+header .ghost { font-weight: 700; font-size: 18px; padding: 6px 0; }
+.streaks { display: flex; gap: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.streaks .bump { animation: bump .3s ease; display: inline-block; }
+@keyframes bump { 50% { transform: scale(1.35); } }
+main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0 16px 16px; }
+.screen { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
+h1 { margin: 12px 0 4px; font-size: 28px; }
+.label { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button {
+  font: inherit; color: var(--fg); background: var(--card); border: 2px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; cursor: pointer; text-align: center; touch-action: manipulation; min-height: 52px;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+button:active { transform: scale(.98); }
+button small { display: block; font-size: 13px; color: var(--muted); font-weight: 400; }
+button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
+button.big { font-size: 19px; padding: 16px; }
+button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.fine { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
+.question { margin: 4px 0 0; font-size: 20px; font-weight: 600; text-align: center; }
+.map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
+.map svg { width: 100%; height: 100%; overflow: visible; }
+.map path { fill: var(--shape); stroke: var(--shape-line); stroke-width: 2.5; stroke-linejoin: round; fill-rule: evenodd; vector-effect: non-scaling-stroke; }
+.map.pop path { animation: pop .35s ease; transform-origin: center; }
+@keyframes pop { 0% { opacity: 0; transform: scale(.9); } 100% { opacity: 1; transform: none; } }
+.feedback { min-height: 30px; text-align: center; font-weight: 700; font-size: 18px; }
+.feedback.good { color: var(--good); }
+.feedback.bad { color: var(--bad); }
+.feedback small { display: block; font-weight: 400; color: var(--muted); font-size: 14px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.options button { font-weight: 600; font-size: 17px; }
+.options button.good { background: var(--good-bg); border-color: var(--good); }
+.options button.bad { background: var(--bad-bg); border-color: var(--bad); }
+.options button:disabled { cursor: default; opacity: .9; }
+.typeform { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.typeform input {
+  font: inherit; font-size: 18px; min-height: 52px; padding: 0 14px; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--card); color: var(--fg); min-width: 0;
+}
+.typeform input:focus { outline: none; border-color: var(--accent); }
+.typeform input.good { border-color: var(--good); }
+.typeform input.bad { border-color: var(--bad); }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 16px 12px; }
+footer a { color: inherit; }
+@media (max-width: 380px) { .typeform { grid-template-columns: 1fr auto; } .typeform #skip { grid-column: 1 / -1; min-height: 40px; } }
+@media (min-width: 700px) { .map { height: min(48dvh, 420px); } }
