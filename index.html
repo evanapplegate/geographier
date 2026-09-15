@@ -37,7 +37,7 @@ h1 { margin: 12px 0 4px; font-size: 30px; font-weight: 700; letter-spacing: -.01
 .label { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
 .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 button {
-  font: inherit; color: var(--fg); background: var(--card); border: 2px solid var(--line); border-radius: 14px;
+  font: inherit; color: var(--fg); background: var(--card); border: 2px solid var(--line); border-radius: 3px;
   padding: 14px 16px; cursor: pointer; text-align: center; touch-action: manipulation; min-height: 52px;
   transition: background .12s, border-color .12s, transform .06s;
 }
@@ -48,7 +48,7 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
 button.big { font-size: 19px; padding: 16px; }
 button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.chips button { min-height: 40px; padding: 8px 10px; font-size: 15px; border-radius: 10px; }
+.chips button { min-height: 40px; padding: 8px 10px; font-size: 15px; border-radius: 3px; }
 .fine { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
 .question { margin: 4px 0 0; font-size: 22px; font-weight: 600; text-align: center; }
 .map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
@@ -78,7 +78,7 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 .options button:disabled { cursor: default; opacity: .9; }
 .typeform { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
 .typeform input {
-  font: inherit; font-size: 18px; min-height: 52px; padding: 0 14px; border-radius: 14px;
+  font: inherit; font-size: 18px; min-height: 52px; padding: 0 14px; border-radius: 3px;
   border: 2px solid var(--line); background: var(--card); color: var(--fg); min-width: 0;
 }
 .typeform input:focus { outline: none; border-color: var(--accent); }
