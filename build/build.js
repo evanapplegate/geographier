@@ -159,17 +159,47 @@ fs.writeFileSync(path.join(OUT, "countries.json"), JSON.stringify({ noun: "count
 console.log("countries:", countries.length, "bytes:", fs.statSync(path.join(OUT, "countries.json")).size);
 const regs = {}; for (const c of countries) regs[c.r] = (regs[c.r] || 0) + 1; console.log(regs);
 
-// ---------- US states ----------
-const a1 = JSON.parse(fs.readFileSync(path.join(NE, "admin1.geojson")));
-const states = [];
-for (const f of a1.features) {
-  const p = f.properties;
-  if (p.iso_a2 !== "US" || p.type_en !== "State") continue;
-  const geom = trimFarFlung(f.geometry, true);
-  const aliases = uniq([p.postal, p.abbrev, ...String(p.name_alt || "").split("|"), p.name_en, p.gn_name, p.woe_name, (p.iso_3166_2 || "").split("-")[1]]).filter(a => a !== p.name);
-  const c = d3.geoCentroid({ type: "Feature", geometry: geom }).map(v => +v.toFixed(1));
-  states.push({ id: p.postal, name: p.name, aliases, c, ...outline(geom) });
+// ---------- US states (composite Albers USA map, all states in one coordinate space) ----------
+// Input is produced by mapshaper: ne_10m_admin_1_states_provinces_lakes -> filter US states -> -proj albersusa -> simplify
+const us = JSON.parse(fs.readFileSync(path.join(NE, "us_albers.geojson")));
+const REGIONS = {
+  "New England": ["CT", "ME", "MA", "NH", "RI", "VT"],
+  "Mid-Atlantic": ["NY", "NJ", "PA", "DE", "MD"],
+  "The South": ["VA", "WV", "NC", "SC", "GA", "FL", "KY", "TN", "AL", "MS"],
+  "South Central": ["AR", "LA", "TX", "OK"],
+  "Great Lakes": ["OH", "MI", "IN", "IL", "WI", "MN"],
+  "Great Plains": ["IA", "MO", "ND", "SD", "NE", "KS"],
+  "Mountain West": ["MT", "ID", "WY", "CO", "UT", "NV", "AZ", "NM"],
+  "Pacific": ["WA", "OR", "CA", "AK", "HI"],
+};
+const REGION_OF = {}; for (const [r, ids] of Object.entries(REGIONS)) for (const id of ids) REGION_OF[id] = r;
+{
+  const W = 960;
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  const eachPt = (geom, fn) => { for (const poly of polygons(geom)) for (const ring of poly) for (const pt of ring) fn(pt); };
+  for (const f of us.features) eachPt(f.geometry, ([x, y]) => { if (x < minx) minx = x; if (y < miny) miny = y; if (x > maxx) maxx = x; if (y > maxy) maxy = y; });
+  const scale = W / (maxx - minx);
+  const H = Math.round((maxy - miny) * scale);
+  const states = [];
+  for (const f of us.features) {
+    const p = f.properties;
+    let d = "";
+    for (const poly of polygons(f.geometry)) for (const ring of poly) {
+      let px = 0, py = 0;
+      ring.forEach((pt, i) => {
+        const rx = Math.round((pt[0] - minx) * scale), ry = Math.round((maxy - pt[1]) * scale);
+        if (i === 0) d += `M${rx} ${ry}`;
+        else { const dx = rx - px, dy = ry - py; if (dx === 0 && dy === 0) return; d += `l${dx} ${dy}`; }
+        px = rx; py = ry;
+      });
+      d += "z";
+    }
+    d = d.replace(/l(-?\d+) (-?\d+)/g, (m, a, b) => "l" + a + (b[0] === "-" ? b : " " + b));
+    const aliases = uniq([p.postal, p.abbrev, ...String(p.name_alt || "").split("|"), p.name_en, p.gn_name, p.woe_name, (p.iso_3166_2 || "").split("-")[1]]).filter(a => a !== p.name);
+    if (!REGION_OF[p.postal]) throw new Error("no region for " + p.postal);
+    states.push({ id: p.postal, name: p.name, aliases, c: [+(+p.longitude).toFixed(1), +(+p.latitude).toFixed(1)], r: REGION_OF[p.postal], d });
+  }
+  states.sort((a, b) => a.name.localeCompare(b.name));
+  fs.writeFileSync(path.join(OUT, "us-states.json"), JSON.stringify({ noun: "state", map: { w: W, h: H }, items: states }));
+  console.log("states:", states.length, "bytes:", fs.statSync(path.join(OUT, "us-states.json")).size, "map", W, "x", H);
 }
-states.sort((a, b) => a.name.localeCompare(b.name));
-fs.writeFileSync(path.join(OUT, "us-states.json"), JSON.stringify({ noun: "state", items: states }));
-console.log("states:", states.length, "bytes:", fs.statSync(path.join(OUT, "us-states.json")).size);

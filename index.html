@@ -12,7 +12,7 @@
 <style>
 :root {
   --bg: #f3ede2; --fg: #3d3429; --muted: #8c8071; --card: #faf6ee; --line: #e0d6c5;
-  --accent: #9a7b55; --accent-fg: #fbf7ef; --shape: #cdb48f; --shape-line: #6e5a3f;
+  --accent: #9a7b55; --accent-fg: #fbf7ef; --shape: #b58d5c; --shape-line: #4f3d28; --base: #e8dfcd; --base-line: #c4b69d;
   --good: #5f7f4a; --good-bg: #e4ead6; --bad: #a85a4b; --bad-bg: #f0dcd4;
   color-scheme: light;
 }
@@ -50,10 +50,18 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 .fine { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
 .question { margin: 4px 0 0; font-size: 22px; font-weight: 600; text-align: center; }
 .map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
+.map.composite { height: auto; aspect-ratio: 960 / 596; max-height: 46dvh; }
 .map svg { width: 100%; height: 100%; overflow: visible; }
-.map path { fill: var(--shape); stroke: var(--shape-line); stroke-width: 2.5; stroke-linejoin: round; fill-rule: evenodd; vector-effect: non-scaling-stroke; }
-.map.pop path { animation: pop .35s ease; transform-origin: center; }
-@keyframes pop { 0% { opacity: 0; transform: scale(.9); } 100% { opacity: 1; transform: none; } }
+.map path { stroke-linejoin: round; fill-rule: evenodd; vector-effect: non-scaling-stroke; }
+.map #shape { fill: var(--shape); stroke: var(--shape-line); stroke-width: 2.5; }
+.map #base path { fill: var(--base); stroke: var(--base-line); stroke-width: 1; }
+.map #halo { fill: none; stroke: var(--accent); stroke-width: 10; opacity: .3; }
+.map.composite #shape { stroke-width: 1.5; }
+.map.pop #shape, .map.pop #halo { animation: fade .3s ease; }
+.map.pop #halo { animation: pulse 1.2s ease-out; }
+@keyframes fade { 0% { opacity: 0; } }
+@keyframes pulse { 0% { opacity: 0; stroke-width: 30; } 100% { opacity: .3; stroke-width: 10; } }
+.region { margin: 0; text-align: center; color: var(--muted); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; min-height: 20px; }
 .feedback { min-height: 30px; text-align: center; font-weight: 700; font-size: 18px; }
 .feedback.good { color: var(--good); }
 .feedback.bad { color: var(--bad); }
@@ -75,7 +83,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 
 footer a { color: inherit; }
 @media (max-width: 380px) { .typeform { grid-template-columns: 1fr auto; } .typeform #skip { grid-column: 1 / -1; min-height: 40px; } }
 @media (min-width: 700px) { .map { height: min(48dvh, 420px); } }
-@media (prefers-reduced-motion: reduce) { .map.pop path, .streaks .bump { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .map.pop #shape, .map.pop #halo, .streaks .bump { animation: none; } }
 </style>
 </head>
 <body>
@@ -110,7 +118,8 @@ footer a { color: inherit; }
 
   <section id="quiz" class="screen" hidden>
     <p id="question" class="question"></p>
-    <div id="map" class="map"><svg id="svg" preserveAspectRatio="xMidYMid meet"><path id="shape"/></svg></div>
+    <p id="region" class="region"></p>
+    <div id="map" class="map"><svg id="svg" preserveAspectRatio="xMidYMid meet"><g id="base"></g><path id="halo"/><path id="shape"/></svg></div>
     <div id="feedback" class="feedback" aria-live="polite"></div>
     <div id="options" class="options"></div>
     <form id="typeform" class="typeform" autocomplete="off" hidden>
@@ -128,7 +137,7 @@ footer a { color: inherit; }
   const $ = id => document.getElementById(id);
   const els = {
     menu: $("menu"), quiz: $("quiz"), decks: $("decks"), modes: $("modes"), start: $("start"), home: $("home"),
-    question: $("question"), map: $("map"), svg: $("svg"), shape: $("shape"), feedback: $("feedback"),
+    question: $("question"), region: $("region"), map: $("map"), svg: $("svg"), base: $("base"), halo: $("halo"), shape: $("shape"), feedback: $("feedback"),
     options: $("options"), form: $("typeform"), guess: $("guess"), skip: $("skip"), next: $("next"),
     streak: $("streak"), best: $("best"), menuStats: $("menu-stats"),
   };
@@ -219,9 +228,12 @@ footer a { color: inherit; }
   // ---------- quiz state ----------
   let deck = null, queue = [], current = null, answered = false, advanceTimer = null;
 
+  // Runs of one region at a time: shuffle the regions, then shuffle within each.
   function refillQueue() {
     const last = current;
-    queue = shuffle(deck.items.slice());
+    const groups = new Map();
+    for (const it of deck.items) { const k = it.r || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    queue = shuffle([...groups.values()]).flatMap(g => shuffle(g));
     if (last && queue[0] === last && queue.length > 1) queue.push(queue.shift());
   }
   function nextItem() {
@@ -258,7 +270,14 @@ footer a { color: inherit; }
     clearTimeout(advanceTimer);
     const noun = deck.noun;
     els.question.textContent = `Which ${noun} is this?`;
-    els.svg.setAttribute("viewBox", `0 0 ${item.w} ${item.h}`);
+    els.region.textContent = item.r || "";
+    if (deck.map) {
+      els.svg.setAttribute("viewBox", `0 0 ${deck.map.w} ${deck.map.h}`);
+      els.halo.setAttribute("d", item.d);
+    } else {
+      els.svg.setAttribute("viewBox", `0 0 ${item.w} ${item.h}`);
+      els.halo.removeAttribute("d");
+    }
     els.shape.setAttribute("d", item.d);
     els.map.classList.remove("pop"); void els.map.offsetWidth; els.map.classList.add("pop");
     els.feedback.textContent = ""; els.feedback.className = "feedback";
@@ -359,6 +378,10 @@ footer a { color: inherit; }
     }
     els.start.disabled = false; els.start.textContent = "Start";
     refillQueue();
+    // Composite decks draw every shape once as a muted base layer; the asked one is highlighted on top.
+    els.base.innerHTML = "";
+    els.map.classList.toggle("composite", !!deck.map);
+    if (deck.map) for (const it of deck.items) { const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", it.d); els.base.appendChild(p); }
     els.menu.hidden = true; els.quiz.hidden = false;
     renderStreak(false);
     showItem(nextItem());
