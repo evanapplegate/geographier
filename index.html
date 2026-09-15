@@ -53,6 +53,9 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 .question { margin: 4px 0 0; font-size: 22px; font-weight: 600; text-align: center; }
 .map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
 .map.composite { height: auto; aspect-ratio: 960 / 596; max-height: 46dvh; }
+.map.sheet { height: auto; aspect-ratio: 4 / 3; max-height: 46dvh; }
+.map.sheet #shape { stroke-width: 1.5; }
+.map.sheet svg { overflow: hidden; }
 .map svg { width: 100%; height: 100%; overflow: visible; }
 .map path { stroke-linejoin: round; fill-rule: evenodd; vector-effect: non-scaling-stroke; }
 .map #shape { fill: var(--shape); stroke: var(--shape-line); stroke-width: 2.5; }
@@ -179,6 +182,19 @@ footer a { color: inherit; }
     return deck;
   }
 
+  const mapCache = {};
+  function loadMap(key) {
+    if (!mapCache[key]) mapCache[key] = fetch(`data/map-${key}.json`).then(r => { if (!r.ok) throw new Error("map"); return r.json(); }).catch(err => { delete mapCache[key]; throw err; });
+    return mapCache[key];
+  }
+  let baseKey = null;
+  function drawBase(key, paths) {
+    if (baseKey === key) return;
+    baseKey = key;
+    els.base.innerHTML = "";
+    for (const d of paths) { const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); els.base.appendChild(p); }
+  }
+
   // ---------- text matching ----------
   function norm(s) {
     return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -241,7 +257,7 @@ footer a { color: inherit; }
   const rnd = a => a[Math.floor(Math.random() * a.length)];
 
   // ---------- quiz state ----------
-  let deck = null, queue = [], current = null, answered = false, advanceTimer = null;
+  let deck = null, queue = [], current = null, answered = false, advanceTimer = null, forced = null;
 
   // Runs of one region at a time: shuffle the regions, then shuffle within each.
   function refillQueue() {
@@ -280,13 +296,24 @@ footer a { color: inherit; }
     els.menuStats.textContent = s.seen ? `This deck and mode: best streak ${s.best}, ${s.right}/${s.seen} correct (${Math.round(100 * s.right / s.seen)}%).` : "";
   }
 
-  function showItem(item) {
+  let showSeq = 0;
+  async function showItem(item) {
     current = item; answered = false;
     clearTimeout(advanceTimer);
+    const seq = ++showSeq;
     const noun = deck.noun;
     els.question.textContent = `Which ${noun} is this?`;
     els.region.textContent = item.r || "";
-    if (deck.map) {
+    if (item.m) {
+      // Country in context: its continent sheet as the base layer, windowed to the country and its neighbors.
+      let sheet;
+      try { sheet = await loadMap(item.m); } catch { els.feedback.textContent = "Couldn’t load the map. Check your connection."; return; }
+      if (seq !== showSeq) return;
+      drawBase(item.m, sheet.paths);
+      els.svg.setAttribute("viewBox", item.win.join(" "));
+      els.halo.setAttribute("d", item.d);
+      if (queue[0] && queue[0].m) loadMap(queue[0].m).catch(() => {});
+    } else if (deck.map) {
       els.svg.setAttribute("viewBox", `0 0 ${deck.map.w} ${deck.map.h}`);
       els.halo.setAttribute("d", item.d);
     } else {
@@ -411,9 +438,13 @@ footer a { color: inherit; }
     els.start.disabled = false; els.start.textContent = "Start";
     refillQueue();
     // Composite decks draw every shape once as a muted base layer; the asked one is highlighted on top.
-    els.base.innerHTML = "";
+    baseKey = null; els.base.innerHTML = "";
+    const sheets = !deck.map && deck.items.some(it => it.m);
     els.map.classList.toggle("composite", !!deck.map);
-    if (deck.map) for (const it of deck.items) { const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", it.d); els.base.appendChild(p); }
+    els.map.classList.toggle("sheet", sheets);
+    if (deck.map) drawBase("deck", deck.items.map(it => it.d));
+    if (sheets) for (const key of new Set(queue.map(it => it.m))) loadMap(key).catch(() => {});
+    if (forced) { const i = queue.findIndex(it => it.id === forced); if (i > 0) queue.unshift(queue.splice(i, 1)[0]); forced = null; }
     els.menu.hidden = true; els.quiz.hidden = false;
     renderStreak(false);
     showItem(nextItem());
@@ -437,8 +468,8 @@ footer a { color: inherit; }
   });
 
   // Deep link: #countries/hard
-  const m = location.hash.match(/^#(us-states|countries)\/(easy|hard)$/);
-  if (m) { prefs.deck = m[1]; prefs.mode = m[2]; store.set("prefs", prefs); }
+  const m = location.hash.match(/^#(us-states|countries)\/(easy|hard)(?:\/([A-Z]{2,3}))?$/);
+  if (m) { prefs.deck = m[1]; prefs.mode = m[2]; forced = m[3] || null; store.set("prefs", prefs); }
   syncMenu();
   if (m) startQuiz();
   // Fetch the chosen deck right away so Start is instant, then warm the other one.

@@ -17,6 +17,7 @@ const R = 6371;
 
 // ---------- helpers ----------
 function polygons(geom) {
+  if (!geom) return [];
   if (geom.type === "Polygon") return [geom.coordinates];
   if (geom.type === "MultiPolygon") return geom.coordinates;
   return [];
@@ -114,7 +115,7 @@ function trimFarFlung(geom, keepAll) {
 
 function uniq(arr) { const seen = new Set(); return arr.filter(x => { if (!x || typeof x !== "string") return false; const k = x.trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; }).map(x => x.trim()); }
 
-// ---------- countries ----------
+// ---------- countries: six continent maps, each country windowed in context ----------
 const DISPLAY = { RUS: "Russia", KOR: "South Korea", PRK: "North Korea", LAO: "Laos", CZE: "Czechia", BRN: "Brunei", CPV: "Cabo Verde", SWZ: "Eswatini", KGZ: "Kyrgyzstan", SVK: "Slovakia", FSM: "Micronesia", GMB: "The Gambia", PSX: "Palestine", KOS: "Kosovo", VAT: "Vatican City", TUR: "Turkey", CIV: "Côte d'Ivoire", MKD: "North Macedonia", SDS: "South Sudan", USA: "United States", GBR: "United Kingdom" };
 const EXTRA = {
   USA: ["USA", "US", "U.S.", "U.S.A.", "America", "United States", "the States"],
@@ -139,8 +140,120 @@ const EXTRA = {
 const EXCLUDE = new Set(["ABW", "ALD", "CUW", "GGY", "GRL", "HKG", "IMN", "JEY", "MAC", "SXM", "SOL", "CYN", "SMR", "VAT", "MCO", "NRU", "TUV"]);
 const INCLUDE = new Set(["KOS", "PSX"]);
 const TRIM = { NOR: c => c[1] > 55 && c[1] < 72 && c[0] > 0, ECU: c => c[0] > -85, PRT: c => c[0] > -20, ESP: c => c[1] > 30 };
+// Which base map a country is drawn on (defaults to its continent). Russia and Turkey read better on the Asia sheet.
+const MAP_OF = { RUS: "asia" };
+const MAPS = {
+  africa:        { center: [18, 2],    lon: [-26, 62],  lat: [-40, 42] },
+  europe:        { center: [15, 54],   lon: [-30, 52],  lat: [33, 74] },
+  asia:          { center: [92, 42],   lon: [15, 192],  lat: [-13, 82] },
+  "north-america": { center: [-95, 42], lon: [-172, -48], lat: [5, 84] },
+  "south-america": { center: [-60, -20], lon: [-95, -28], lat: [-58, 16] },
+  oceania:       { center: [158, -18], lon: [105, 218], lat: [-50, 24] },
+};
+const MAP_KEY = { Africa: "africa", Europe: "europe", Asia: "asia", "North America": "north-america", "South America": "south-america", Oceania: "oceania" };
+const MW = 2400;           // base map width in px
+const TGT_TOL = 0.3;       // target simplification in map px
+const MIN_WIN = 300;       // smallest window (px) so island nations get neighbors for context
+const FILL = 0.45;         // target occupies about this fraction of the window
+const ASPECT = 4 / 3;
+
+function windowPoints(m) {
+  const pts = [];
+  for (let lon = m.lon[0]; lon <= m.lon[1]; lon += 2) { pts.push([lon, m.lat[0]], [lon, m.lat[1]]); }
+  for (let lat = m.lat[0]; lat <= m.lat[1]; lat += 2) { pts.push([m.lon[0], lat], [m.lon[1], lat]); }
+  return { type: "MultiPoint", coordinates: pts.map(([lon, lat]) => [((lon + 180) % 360 + 360) % 360 - 180, lat]) };
+}
+function toRelative(abs) {
+  // "M1 2L3 4L5 6Z..." -> relative integer path
+  let out = "", px = 0, py = 0;
+  const re = /([MLZ])([^MLZ]*)/g; let t;
+  while ((t = re.exec(abs))) {
+    const cmd = t[1];
+    if (cmd === "Z") { out += "z"; continue; }
+    const [x, y] = t[2].split(",").map(Number);
+    const rx = Math.round(x), ry = Math.round(y);
+    if (cmd === "M") out += `M${rx} ${ry}`;
+    else { const dx = rx - px, dy = ry - py; if (dx === 0 && dy === 0) continue; out += `l${dx}${dy < 0 ? dy : " " + dy}`; }
+    px = rx; py = ry;
+  }
+  return out;
+}
 
 const a0 = JSON.parse(fs.readFileSync(path.join(NE, "admin0.geojson")));
+const base = JSON.parse(fs.readFileSync(path.join(NE, "admin0_base.geojson")));
+// mapshaper writes RFC 7946 winding (counterclockwise exteriors); d3 wants clockwise exteriors, so rewind.
+for (const f of base.features) {
+  for (const poly of polygons(f.geometry)) poly.forEach((ring, i) => {
+    const big = d3.geoArea({ type: "Polygon", coordinates: [ring] }) > 2 * Math.PI;
+    if (i === 0 ? big : !big) ring.reverse();
+  });
+}
+const projections = {};
+for (const [key, m] of Object.entries(MAPS)) {
+  const proj = d3.geoAzimuthalEqualArea().rotate([-m.center[0], -m.center[1]]).clipAngle(85).precision(0.3);
+  const wp = windowPoints(m);
+  proj.fitWidth(MW, wp);
+  const b = d3.geoPath(proj).bounds(wp);
+  const H = Math.ceil(b[1][1] - b[0][1]);
+  proj.fitExtent([[0, 0], [MW, H]], wp).clipExtent([[0, 0], [MW, H]]);
+  projections[key] = { proj, w: MW, h: H };
+  const gen = d3.geoPath(proj).digits(1);
+  const paths = [];
+  for (const f of base.features) {
+    if (!f.geometry) continue;
+    if (d3.geoDistance(m.center, d3.geoCentroid(f)) > 80 * Math.PI / 180) continue;
+    const s = gen(f);
+    if (s) { const r = toRelative(s); if (r.length > 6) paths.push(r); }
+  }
+  const file = path.join(OUT, `map-${key}.json`);
+  fs.writeFileSync(file, JSON.stringify({ w: MW, h: H, paths }));
+  console.log(`map-${key}: ${paths.length} shapes, ${fs.statSync(file).size} bytes, ${MW}x${H}`);
+}
+
+// Project the target with the sheet projection (vertex-wise, no clipping), simplify, and derive its window.
+function targetPath(geom, mapKey) {
+  const { proj, w, h } = projections[mapKey];
+  const rings = [];
+  for (const poly of polygons(geom)) poly.forEach((ring, i) => rings.push({ pts: ring.map(pt => proj(pt)).filter(Boolean), hole: i > 0 }));
+  // Window from the raw extent first, so the simplification tolerance can follow the zoom level.
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  const see = (x, y) => { if (x < minx) minx = x; if (y < miny) miny = y; if (x > maxx) maxx = x; if (y > maxy) maxy = y; };
+  for (const r of rings) for (const [x, y] of r.pts) see(x, y);
+  let bw = maxx - minx, bh = maxy - miny;
+  let ww = Math.max(MIN_WIN, bw / FILL, (bh / FILL) * ASPECT), wh = ww / ASPECT;
+  if (ww > w) { ww = w; wh = ww / ASPECT; } if (wh > h) { wh = h; ww = wh * ASPECT; }
+  let wx = (minx + maxx) / 2 - ww / 2, wy = (miny + maxy) / 2 - wh / 2;
+  wx = Math.max(0, Math.min(w - ww, wx)); wy = Math.max(0, Math.min(h - wh, wy));
+  // About 0.6 screen px at a 480px-wide viewport.
+  const tol = Math.max(TGT_TOL, ww / 480 * 0.6);
+  const digits = ww > 600 ? 0 : 1;
+  const rnd = v => Math.round(v * 10 ** digits) / 10 ** digits;
+  const solid = [], dots = [];
+  for (const r of rings) {
+    const pts = dp(r.pts, tol);
+    const a = Math.abs(ringArea(pts));
+    if (pts.length < 4 || a < 2 * tol * tol) { if (!r.hole) dots.push({ c: ringCentroid(r.pts), a }); continue; }
+    solid.push(pts);
+  }
+  let d = "";
+  for (const pts of solid) {
+    let px = 0, py = 0;
+    pts.forEach(([x, y], i) => {
+      const rx = rnd(x), ry = rnd(y);
+      if (i === 0) d += `M${rx} ${ry}`;
+      else { const dx = rnd(rx - px), dy = rnd(ry - py); if (!dx && !dy) return; d += `l${dx}${dy < 0 ? dy : " " + dy}`; }
+      px = rx; py = ry;
+    });
+    d += "z";
+  }
+  const solidArea = solid.reduce((acc, p) => acc + Math.abs(ringArea(p)), 0);
+  dots.sort((p, q) => q.a - p.a);
+  const nDots = solidArea < 400 ? 40 : Math.min(dots.length, 12);
+  const ds = Math.max(3, Math.round(ww / 220));
+  for (const { c } of dots.slice(0, nDots)) { const x = Math.round(c[0] - ds / 2), y = Math.round(c[1] - ds / 2); d += `M${x} ${y}h${ds}v${ds}h-${ds}z`; }
+  return { d, win: [wx, wy, ww, wh].map(Math.round) };
+}
+
 const countries = [];
 for (const f of a0.features) {
   const p = f.properties, id = p.ADM0_A3;
@@ -152,12 +265,12 @@ for (const f of a0.features) {
   const aliases = uniq([name, p.NAME, p.NAME_LONG, p.NAME_EN, p.FORMAL_EN, sortName, p.NAME_CIAWF, p.NAME_ALT, p.BRK_NAME, p.ADMIN, p.GEOUNIT, p.SUBUNIT, p.ABBREV, ...(EXTRA[id] || [])]).filter(a => a !== name);
   const c = d3.geoCentroid({ type: "Feature", geometry: geom }).map(v => +v.toFixed(1));
   let cont = p.CONTINENT; if (cont === "Seven seas (open ocean)") cont = /Asia/.test(p.SUBREGION) ? "Asia" : "Africa";
-  countries.push({ id, name, aliases, c, r: cont, ...outline(geom) });
+  const m = MAP_OF[id] || MAP_KEY[cont];
+  countries.push({ id, name, aliases, c, r: cont, m, ...targetPath(geom, m) });
 }
 countries.sort((a, b) => a.name.localeCompare(b.name));
 fs.writeFileSync(path.join(OUT, "countries.json"), JSON.stringify({ noun: "country", items: countries }));
 console.log("countries:", countries.length, "bytes:", fs.statSync(path.join(OUT, "countries.json")).size);
-const regs = {}; for (const c of countries) regs[c.r] = (regs[c.r] || 0) + 1; console.log(regs);
 
 // ---------- US states (composite Albers USA map, all states in one coordinate space) ----------
 // Input is produced by mapshaper: ne_10m_admin_1_states_provinces_lakes -> filter US states -> -proj albersusa -> simplify

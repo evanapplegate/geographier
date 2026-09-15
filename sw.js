@@ -1,6 +1,6 @@
 // Stale-while-revalidate cache: serve instantly from cache, refresh in the background.
-const CACHE = "geographier-v1";
-const SHELL = ["./", "index.html", "data/us-states.json", "data/countries.json", "manifest.webmanifest", "icon.svg"];
+const CACHE = "geographier-v2";
+const SHELL = ["./", "index.html", "data/us-states.json", "data/countries.json", "data/map-africa.json", "data/map-asia.json", "data/map-europe.json", "data/map-north-america.json", "data/map-south-america.json", "data/map-oceania.json", "manifest.webmanifest", "icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
