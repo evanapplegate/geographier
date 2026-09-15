@@ -47,6 +47,8 @@ button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accen
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
 button.big { font-size: 19px; padding: 16px; }
 button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.chips button { min-height: 40px; padding: 8px 10px; font-size: 15px; border-radius: 10px; }
 .fine { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
 .question { margin: 4px 0 0; font-size: 22px; font-weight: 600; text-align: center; }
 .map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
@@ -112,6 +114,10 @@ footer a { color: inherit; }
         <button data-mode="hard">Hard<small>type the name</small></button>
       </div>
     </div>
+    <div class="group">
+      <div class="label" id="regions-label">Region</div>
+      <div class="chips" id="regions"></div>
+    </div>
     <button id="start" class="primary big">Start</button>
     <p class="fine" id="menu-stats"></p>
   </section>
@@ -139,7 +145,7 @@ footer a { color: inherit; }
     menu: $("menu"), quiz: $("quiz"), decks: $("decks"), modes: $("modes"), start: $("start"), home: $("home"),
     question: $("question"), region: $("region"), map: $("map"), svg: $("svg"), base: $("base"), halo: $("halo"), shape: $("shape"), feedback: $("feedback"),
     options: $("options"), form: $("typeform"), guess: $("guess"), skip: $("skip"), next: $("next"),
-    streak: $("streak"), best: $("best"), menuStats: $("menu-stats"),
+    streak: $("streak"), best: $("best"), menuStats: $("menu-stats"), regions: $("regions"), regionsLabel: $("regions-label"),
   };
 
   // ---------- persistence ----------
@@ -148,6 +154,15 @@ footer a { color: inherit; }
     set(k, v) { try { localStorage.setItem("geographier:" + k, JSON.stringify(v)); } catch {} },
   };
   const prefs = store.get("prefs", { deck: "us-states", mode: "easy" });
+  // Region names are fixed in the data build; listed here so the menu works before a deck loads.
+  const REGIONS = {
+    "us-states": ["New England", "Mid-Atlantic", "The South", "South Central", "Great Lakes", "Great Plains", "Mountain West", "Pacific"],
+    "countries": ["Africa", "Asia", "Europe", "North America", "South America", "Oceania"],
+  };
+  const REGION_LABEL = { "us-states": "Region", "countries": "Continent" };
+  if (!prefs.regions) prefs.regions = {};
+  const selectedRegions = () => (prefs.regions[prefs.deck] || []).filter(r => REGIONS[prefs.deck].includes(r));
+  const inPool = it => { const sel = selectedRegions(); return !sel.length || sel.includes(it.r); };
   const statKey = () => `${prefs.deck}:${prefs.mode}`;
   const stats = () => store.get("stats:" + statKey(), { streak: 0, best: 0, seen: 0, right: 0 });
   const saveStats = s => store.set("stats:" + statKey(), s);
@@ -232,7 +247,7 @@ footer a { color: inherit; }
   function refillQueue() {
     const last = current;
     const groups = new Map();
-    for (const it of deck.items) { const k = it.r || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    for (const it of deck.items.filter(inPool)) { const k = it.r || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
     queue = shuffle([...groups.values()]).flatMap(g => shuffle(g));
     if (last && queue[0] === last && queue.length > 1) queue.push(queue.shift());
   }
@@ -358,9 +373,26 @@ footer a { color: inherit; }
   const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ---------- screens ----------
+  function renderRegions() {
+    const sel = selectedRegions();
+    els.regionsLabel.textContent = REGION_LABEL[prefs.deck];
+    els.regions.innerHTML = "";
+    for (const name of ["All", ...REGIONS[prefs.deck]]) {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.classList.toggle("on", name === "All" ? !sel.length : sel.includes(name));
+      b.addEventListener("click", () => {
+        let next = name === "All" ? [] : (sel.includes(name) ? sel.filter(r => r !== name) : [...sel, name]);
+        if (next.length === REGIONS[prefs.deck].length) next = [];
+        prefs.regions[prefs.deck] = next; store.set("prefs", prefs); renderRegions();
+      });
+      els.regions.appendChild(b);
+    }
+  }
   function syncMenu() {
     for (const b of els.decks.querySelectorAll("button")) b.classList.toggle("on", b.dataset.deck === prefs.deck);
     for (const b of els.modes.querySelectorAll("button")) b.classList.toggle("on", b.dataset.mode === prefs.mode);
+    renderRegions();
     renderStreak(false); renderMenuStats();
   }
   function showMenu() {
