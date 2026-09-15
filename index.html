@@ -9,7 +9,74 @@
 <title>Geographier</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+<style>
+:root {
+  --bg: #f3ede2; --fg: #3d3429; --muted: #8c8071; --card: #faf6ee; --line: #e0d6c5;
+  --accent: #9a7b55; --accent-fg: #fbf7ef; --shape: #cdb48f; --shape-line: #6e5a3f;
+  --good: #5f7f4a; --good-bg: #e4ead6; --bad: #a85a4b; --bad-bg: #f0dcd4;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: 17px/1.4 Optima, "Optima Nova", Candara, "Gill Sans", "Segoe UI", Calibri, sans-serif;
+  background: var(--bg); color: var(--fg);
+  display: flex; flex-direction: column; min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+}
+header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; }
+header .ghost { font-weight: 700; font-size: 18px; padding: 6px 0; }
+.streaks { display: flex; gap: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.streaks .bump { animation: bump .3s ease; display: inline-block; }
+@keyframes bump { 50% { transform: scale(1.35); } }
+main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0 16px 16px; }
+.screen { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
+h1 { margin: 12px 0 4px; font-size: 30px; font-weight: 700; letter-spacing: -.01em; }
+.label { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button {
+  font: inherit; color: var(--fg); background: var(--card); border: 2px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; cursor: pointer; text-align: center; touch-action: manipulation; min-height: 52px;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+button:active { transform: scale(.98); }
+button small { display: block; font-size: 13px; color: var(--muted); font-weight: 400; }
+button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
+button.big { font-size: 19px; padding: 16px; }
+button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.fine { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
+.question { margin: 4px 0 0; font-size: 22px; font-weight: 600; text-align: center; }
+.map { width: 100%; height: min(42dvh, 340px); display: flex; align-items: center; justify-content: center; }
+.map svg { width: 100%; height: 100%; overflow: visible; }
+.map path { fill: var(--shape); stroke: var(--shape-line); stroke-width: 2.5; stroke-linejoin: round; fill-rule: evenodd; vector-effect: non-scaling-stroke; }
+.map.pop path { animation: pop .35s ease; transform-origin: center; }
+@keyframes pop { 0% { opacity: 0; transform: scale(.9); } 100% { opacity: 1; transform: none; } }
+.feedback { min-height: 30px; text-align: center; font-weight: 700; font-size: 18px; }
+.feedback.good { color: var(--good); }
+.feedback.bad { color: var(--bad); }
+.feedback small { display: block; font-weight: 400; color: var(--muted); font-size: 14px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.options button { font-weight: 600; font-size: 17px; }
+.options button.good { background: var(--good-bg); border-color: var(--good); }
+.options button.bad { background: var(--bad-bg); border-color: var(--bad); }
+.options button:disabled { cursor: default; opacity: .9; }
+.typeform { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.typeform input {
+  font: inherit; font-size: 18px; min-height: 52px; padding: 0 14px; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--card); color: var(--fg); min-width: 0;
+}
+.typeform input:focus { outline: none; border-color: var(--accent); }
+.typeform input.good { border-color: var(--good); }
+.typeform input.bad { border-color: var(--bad); }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 16px 12px; }
+footer a { color: inherit; }
+@media (max-width: 380px) { .typeform { grid-template-columns: 1fr auto; } .typeform #skip { grid-column: 1 / -1; min-height: 40px; } }
+@media (min-width: 700px) { .map { height: min(48dvh, 420px); } }
+@media (prefers-reduced-motion: reduce) { .map.pop path, .streaks .bump { animation: none; } }
+</style>
 </head>
 <body>
 <header>
@@ -56,6 +123,274 @@
 </main>
 
 <footer>Outlines from <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>.</footer>
-<script src="app.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const els = {
+    menu: $("menu"), quiz: $("quiz"), decks: $("decks"), modes: $("modes"), start: $("start"), home: $("home"),
+    question: $("question"), map: $("map"), svg: $("svg"), shape: $("shape"), feedback: $("feedback"),
+    options: $("options"), form: $("typeform"), guess: $("guess"), skip: $("skip"), next: $("next"),
+    streak: $("streak"), best: $("best"), menuStats: $("menu-stats"),
+  };
+
+  // ---------- persistence ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("geographier:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("geographier:" + k, JSON.stringify(v)); } catch {} },
+  };
+  const prefs = store.get("prefs", { deck: "us-states", mode: "easy" });
+  const statKey = () => `${prefs.deck}:${prefs.mode}`;
+  const stats = () => store.get("stats:" + statKey(), { streak: 0, best: 0, seen: 0, right: 0 });
+  const saveStats = s => store.set("stats:" + statKey(), s);
+
+  // ---------- data ----------
+  const cache = {};
+  async function loadDeck(name) {
+    if (cache[name]) return cache[name];
+    const r = await fetch(`data/${name}.json`);
+    if (!r.ok) throw new Error("Could not load deck");
+    const deck = await r.json();
+    for (const it of deck.items) it.keys = uniq([it.name, ...it.aliases].map(norm));
+    cache[name] = deck;
+    return deck;
+  }
+
+  // ---------- text matching ----------
+  function norm(s) {
+    return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      .replace(/&/g, " and ").replace(/\bst\.?\s+/g, "saint ").replace(/\bmt\.?\s+/g, "mount ")
+      .replace(/[^a-z0-9]+/g, " ").trim().replace(/^the\s+/, "").replace(/\s+/g, " ");
+  }
+  function uniq(a) { return [...new Set(a.filter(Boolean))]; }
+  // Optimal string alignment distance (Levenshtein + adjacent transpositions)
+  function osa(a, b) {
+    const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+    let prev2 = null, prev = Array.from({ length: n + 1 }, (_, j) => j), cur;
+    for (let i = 1; i <= m; i++) {
+      cur = [i];
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+        cur[j] = v;
+      }
+      prev2 = prev; prev = cur;
+    }
+    return prev[n];
+  }
+  const tolerance = len => len <= 3 ? 0 : len <= 5 ? 1 : len <= 12 ? 2 : 3;
+  function bestDist(guess, keys) {
+    let best = Infinity;
+    for (const k of keys) {
+      const d = osa(guess, k);
+      if (d < best) best = d;
+      if (best === 0) break;
+    }
+    return best;
+  }
+  // Accept if the guess is within tolerance of one of the item's names and is not
+  // at least as close to some other item in the deck.
+  function matches(guess, item, items) {
+    const g = norm(guess);
+    if (g.length < 2) return false;
+    if (item.keys.includes(g)) return true;
+    let dc = Infinity, tolOk = false;
+    for (const k of item.keys) {
+      const d = osa(g, k);
+      if (d <= tolerance(k.length) && d < dc) { dc = d; tolOk = true; }
+    }
+    if (!tolOk) return false;
+    for (const other of items) {
+      if (other === item) continue;
+      if (bestDist(g, other.keys) < dc) return false;
+    }
+    return true;
+  }
+
+  // ---------- geometry helpers ----------
+  function distKm(a, b) {
+    const toR = Math.PI / 180, dLat = (b[1] - a[1]) * toR, dLon = (b[0] - a[0]) * toR;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * toR) * Math.cos(b[1] * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(h));
+  }
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const rnd = a => a[Math.floor(Math.random() * a.length)];
+
+  // ---------- quiz state ----------
+  let deck = null, queue = [], current = null, answered = false, advanceTimer = null;
+
+  function refillQueue() {
+    const last = current;
+    queue = shuffle(deck.items.slice());
+    if (last && queue[0] === last && queue.length > 1) queue.push(queue.shift());
+  }
+  function nextItem() {
+    if (!queue.length) refillQueue();
+    return queue.shift();
+  }
+  function requeueMissed(item) {
+    const at = Math.min(queue.length, 3 + Math.floor(Math.random() * 4));
+    queue.splice(at, 0, item);
+  }
+  function distractors(item, n) {
+    const others = deck.items.filter(x => x !== item);
+    const near = others.map(x => [distKm(item.c, x.c), x]).sort((a, b) => a[0] - b[0]).slice(0, 7).map(x => x[1]);
+    const pick = new Set();
+    const nearCount = Math.min(n - 1, 2);
+    while (pick.size < nearCount && near.length) { const x = rnd(near); pick.add(x); near.splice(near.indexOf(x), 1); }
+    while (pick.size < n) pick.add(rnd(others));
+    return [...pick];
+  }
+
+  function renderStreak(bumped) {
+    const s = stats();
+    els.streak.textContent = `🔥 ${s.streak}`;
+    els.best.textContent = `🏆 ${s.best}`;
+    if (bumped) { els.streak.classList.remove("bump"); void els.streak.offsetWidth; els.streak.classList.add("bump"); }
+  }
+  function renderMenuStats() {
+    const s = stats();
+    els.menuStats.textContent = s.seen ? `This deck and mode: best streak ${s.best}, ${s.right}/${s.seen} correct (${Math.round(100 * s.right / s.seen)}%).` : "";
+  }
+
+  function showItem(item) {
+    current = item; answered = false;
+    clearTimeout(advanceTimer);
+    const noun = deck.noun;
+    els.question.textContent = `Which ${noun} is this?`;
+    els.svg.setAttribute("viewBox", `0 0 ${item.w} ${item.h}`);
+    els.shape.setAttribute("d", item.d);
+    els.map.classList.remove("pop"); void els.map.offsetWidth; els.map.classList.add("pop");
+    els.feedback.textContent = ""; els.feedback.className = "feedback";
+    els.next.hidden = true;
+    if (prefs.mode === "easy") {
+      els.form.hidden = true; els.options.hidden = false;
+      els.options.innerHTML = "";
+      const choices = shuffle([item, ...distractors(item, 3)]);
+      choices.forEach((c, i) => {
+        const b = document.createElement("button");
+        b.textContent = c.name; b.dataset.i = i; b.dataset.id = c.id;
+        b.addEventListener("click", () => pickOption(c, b));
+        els.options.appendChild(b);
+      });
+    } else {
+      els.options.hidden = true; els.form.hidden = false;
+      els.guess.value = ""; els.guess.disabled = false; els.guess.className = "";
+      els.guess.focus({ preventScroll: true });
+    }
+  }
+
+  function record(correct) {
+    const s = stats();
+    s.seen++;
+    if (correct) { s.streak++; s.right++; if (s.streak > s.best) s.best = s.streak; }
+    else { s.streak = 0; requeueMissed(current); }
+    saveStats(s);
+    renderStreak(correct);
+  }
+
+  function pickOption(choice, btn) {
+    if (answered) return;
+    answered = true;
+    const correct = choice === current;
+    for (const b of els.options.querySelectorAll("button")) {
+      b.disabled = true;
+      if (b.dataset.id === current.id) b.classList.add("good");
+      else if (b === btn) b.classList.add("bad");
+    }
+    record(correct);
+    finish(correct, null);
+  }
+
+  function checkTyped(e) {
+    e.preventDefault();
+    if (answered) return;
+    const guess = els.guess.value.trim();
+    if (!guess) return;
+    answered = true;
+    const correct = matches(guess, current, deck.items);
+    els.guess.disabled = true;
+    els.guess.classList.add(correct ? "good" : "bad");
+    record(correct);
+    finish(correct, guess);
+  }
+  function skipTyped() {
+    if (answered) return;
+    answered = true;
+    els.guess.disabled = true; els.guess.classList.add("bad");
+    record(false);
+    finish(false, null, true);
+  }
+
+  function finish(correct, guess, skipped) {
+    if (correct) {
+      els.feedback.className = "feedback good";
+      els.feedback.innerHTML = `${rnd(["Correct!", "Yes!", "Nice.", "Got it.", "Right!"])} <small>${escapeHtml(current.name)}</small>`;
+      advanceTimer = setTimeout(advance, 800);
+    } else {
+      els.feedback.className = "feedback bad";
+      els.feedback.innerHTML = `${skipped ? "Skipped." : "Wrong."} It’s ${escapeHtml(current.name)}.` +
+        (guess ? `<small>You typed “${escapeHtml(guess)}”</small>` : "");
+      els.next.hidden = false;
+      els.next.focus({ preventScroll: true });
+    }
+  }
+  function advance() { clearTimeout(advanceTimer); showItem(nextItem()); }
+  const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ---------- screens ----------
+  function syncMenu() {
+    for (const b of els.decks.querySelectorAll("button")) b.classList.toggle("on", b.dataset.deck === prefs.deck);
+    for (const b of els.modes.querySelectorAll("button")) b.classList.toggle("on", b.dataset.mode === prefs.mode);
+    renderStreak(false); renderMenuStats();
+  }
+  function showMenu() {
+    clearTimeout(advanceTimer);
+    els.quiz.hidden = true; els.menu.hidden = false;
+    syncMenu();
+    history.replaceState(null, "", location.pathname);
+  }
+  async function startQuiz() {
+    els.start.disabled = true; els.start.textContent = "Loading…";
+    try {
+      deck = await loadDeck(prefs.deck);
+    } catch (err) {
+      els.start.textContent = "Couldn’t load. Tap to retry"; els.start.disabled = false; return;
+    }
+    els.start.disabled = false; els.start.textContent = "Start";
+    refillQueue();
+    els.menu.hidden = true; els.quiz.hidden = false;
+    renderStreak(false);
+    showItem(nextItem());
+    history.replaceState(null, "", `#${prefs.deck}/${prefs.mode}`);
+  }
+
+  els.decks.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; prefs.deck = b.dataset.deck; store.set("prefs", prefs); syncMenu(); });
+  els.modes.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; prefs.mode = b.dataset.mode; store.set("prefs", prefs); syncMenu(); });
+  els.start.addEventListener("click", startQuiz);
+  els.home.addEventListener("click", showMenu);
+  els.form.addEventListener("submit", checkTyped);
+  els.skip.addEventListener("click", skipTyped);
+  els.next.addEventListener("click", advance);
+  document.addEventListener("keydown", e => {
+    if (els.quiz.hidden) return;
+    if (e.key === "Enter" && answered && !els.next.hidden) { e.preventDefault(); advance(); return; }
+    if (prefs.mode === "easy" && !answered && /^[1-4]$/.test(e.key)) {
+      const b = els.options.querySelector(`button[data-i="${+e.key - 1}"]`); if (b) b.click();
+    }
+    if (e.key === "Escape") showMenu();
+  });
+
+  // Deep link: #countries/hard
+  const m = location.hash.match(/^#(us-states|countries)\/(easy|hard)$/);
+  if (m) { prefs.deck = m[1]; prefs.mode = m[2]; store.set("prefs", prefs); }
+  syncMenu();
+  if (m) startQuiz();
+  // Fetch the chosen deck right away so Start is instant, then warm the other one.
+  if (!m) loadDeck(prefs.deck).catch(() => {});
+  setTimeout(() => loadDeck(prefs.deck === "countries" ? "us-states" : "countries").catch(() => {}), 1500);
+  if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+})();
+</script>
 </body>
 </html>

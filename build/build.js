@@ -8,10 +8,11 @@ const NE = process.argv[2];
 const OUT = path.join(__dirname, "..", "data");
 fs.mkdirSync(OUT, { recursive: true });
 
-const BOX = 1000;       // longest side in px
-const TOL = 0.8;        // Douglas-Peucker tolerance in px
-const MIN_RING_PX2 = 5; // rings smaller than this become dots
-const MAX_DOTS = 80;
+const BOX = +(process.env.BOX || 500);   // longest side in px
+const TOL = +(process.env.TOL || 1.0);    // Douglas-Peucker tolerance in px
+const MIN_RING_PX2 = +(process.env.MINRING || 10); // rings smaller than this become dots
+const MAX_DOTS = 40;
+const MAX_PTS = +(process.env.MAXPTS || 700); // per-feature vertex budget; tolerance grows until met
 const R = 6371;
 
 // ---------- helpers ----------
@@ -62,13 +63,19 @@ function outline(geom) {
   for (const r of rings) for (const [x, y] of r.pts) { if (x < minx) minx = x; if (y < miny) miny = y; if (x > maxx) maxx = x; if (y > maxy) maxy = y; }
   const scale = BOX / Math.max(maxx - minx, maxy - miny);
   const w = Math.max(1, Math.round((maxx - minx) * scale)), h = Math.max(1, Math.round((maxy - miny) * scale));
-  const solid = [], dots = [];
-  for (const r of rings) {
-    let pts = r.pts.map(([x, y]) => [(x - minx) * scale, (y - miny) * scale]);
-    pts = dp(pts, TOL);
-    const a = Math.abs(ringArea(pts));
-    if (pts.length < 4 || a < MIN_RING_PX2) { if (!r.hole) dots.push({ c: ringCentroid(r.pts.map(([x, y]) => [(x - minx) * scale, (y - miny) * scale])), a }); continue; }
-    solid.push(pts);
+  let solid = [], dots = [], tol = TOL;
+  for (let pass = 0; pass < 12; pass++) {
+    solid = []; dots = [];
+    for (const r of rings) {
+      let pts = r.pts.map(([x, y]) => [(x - minx) * scale, (y - miny) * scale]);
+      pts = dp(pts, tol);
+      const a = Math.abs(ringArea(pts));
+      if (pts.length < 4 || a < MIN_RING_PX2) { if (!r.hole) dots.push({ c: ringCentroid(r.pts.map(([x, y]) => [(x - minx) * scale, (y - miny) * scale])), a }); continue; }
+      solid.push(pts);
+    }
+    const n = solid.reduce((acc, p) => acc + p.length, 0);
+    if (n <= MAX_PTS) break;
+    tol *= 1.25;
   }
   dots.sort((p, q) => q.a - p.a);
   let d = "";
@@ -83,10 +90,11 @@ function outline(geom) {
     d += "z";
   }
   const solidArea = solid.reduce((acc, p) => acc + Math.abs(ringArea(p)), 0);
-  const nDots = solidArea < 20000 ? MAX_DOTS : Math.min(dots.length, 30);
+  const nDots = solidArea < 20000 ? MAX_DOTS : Math.min(dots.length, 16);
+  const dr = Math.max(3, Math.round(BOX / 120));
   for (const { c } of dots.slice(0, nDots)) {
-    const [x, y] = c.map(Math.round);
-    d += `M${x - 7} ${y}l7 -7l7 7l-7 7z`;
+    const [x, y] = c.map(v => Math.round(v - dr / 2));
+    d += `M${x} ${y}h${dr}v${dr}h-${dr}z`;
   }
   return { w, h, d: d.replace(/l(-?\d+) (-?\d+)/g, (m, a, b) => "l" + a + (b[0] === "-" ? b : " " + b)).replace(/l(-?\d+)(-?\d+)/g, "l$1$2") };
 }
@@ -94,7 +102,7 @@ function outline(geom) {
 // Keep only polygons within a distance budget of the area-weighted centroid.
 function trimFarFlung(geom, keepAll) {
   const polys = polygons(geom);
-  if (polys.length < 2 || keepAll) return geom;
+  if (polys.length < 2 || keepAll === true) return geom;
   const feat = { type: "Feature", geometry: geom };
   const c = d3.geoCentroid(feat);
   const total = d3.geoArea(feat) * R * R;
@@ -130,7 +138,7 @@ const EXTRA = {
 };
 const EXCLUDE = new Set(["ABW", "ALD", "CUW", "GGY", "GRL", "HKG", "IMN", "JEY", "MAC", "SXM", "SOL", "CYN", "SMR", "VAT", "MCO", "NRU", "TUV"]);
 const INCLUDE = new Set(["KOS", "PSX"]);
-const TRIM = { NOR: c => c[1] < 72, ECU: c => c[0] > -85, PRT: c => c[0] > -20, ESP: c => c[1] > 30 };
+const TRIM = { NOR: c => c[1] > 55 && c[1] < 72 && c[0] > 0, ECU: c => c[0] > -85, PRT: c => c[0] > -20, ESP: c => c[1] > 30 };
 
 const a0 = JSON.parse(fs.readFileSync(path.join(NE, "admin0.geojson")));
 const countries = [];
